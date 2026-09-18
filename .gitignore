@@ -1,0 +1,8 @@
+
+# build output
+dist
+
+# smoke-test screenshots
+.smoke
+
+node_modules

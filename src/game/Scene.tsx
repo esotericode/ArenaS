@@ -6,10 +6,13 @@ import { Weapon } from './Weapon';
 import { Enemies } from './Enemies';
 import { Pickups } from './Pickups';
 import { Effects } from './Effects';
+import { Projectiles } from './Projectiles';
 import { WaveDirector } from './WaveDirector';
 import { PLAYER } from './config';
 import { runtime } from './runtime';
 import { useGame } from './store';
+import { lockPointer } from './pointerLock';
+import { settings } from './settings';
 
 export function Scene() {
   return (
@@ -17,7 +20,7 @@ export function Scene() {
       shadows
       dpr={[1, 1.75]}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
-      camera={{ fov: 80, near: 0.05, far: 400, position: [0, PLAYER.eyeHeight, 12] }}
+      camera={{ fov: settings.fov, near: 0.05, far: 400, position: [0, PLAYER.eyeHeight, 12] }}
       onCreated={({ gl, scene }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.1;
@@ -29,7 +32,7 @@ export function Scene() {
         // clicking the canvas while playing but unlocked re-acquires the pointer
         const st = useGame.getState();
         if ((st.status === 'playing' || st.status === 'paused') && document.pointerLockElement !== runtime.canvas) {
-          runtime.canvas?.requestPointerLock();
+          lockPointer();
         }
       }}
       className="absolute inset-0"
@@ -39,6 +42,7 @@ export function Scene() {
       <Weapon />
       <Enemies />
       <Pickups />
+      <Projectiles />
       <Effects />
       <WaveDirector />
     </Canvas>

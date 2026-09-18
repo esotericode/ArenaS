@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ARENA_HALF, OBSTACLES } from './config';
+import { ARENA_HALF, JUMP_PADS, OBSTACLES } from './config';
 
 export interface AABB {
   min: THREE.Vector3;
@@ -127,4 +127,87 @@ export function groundHeightAt(x: number, z: number, maxY: number): number {
     }
   }
   return h;
+}
+
+/** True when the point sits inside any solid obstacle. */
+export function pointInObstacle(x: number, y: number, z: number, pad = 0): boolean {
+  for (const box of OBSTACLE_AABBS) {
+    if (
+      x >= box.min.x - pad &&
+      x <= box.max.x + pad &&
+      y >= box.min.y - pad &&
+      y <= box.max.y + pad &&
+      z >= box.min.z - pad &&
+      z <= box.max.z + pad
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Slab-method ray/AABB sweep against the world.
+ * Returns the distance to the nearest obstacle along `dir` (normalised),
+ * or `Infinity` when the ray reaches `maxDist` unobstructed.
+ */
+export function rayObstacleDistance(
+  origin: THREE.Vector3,
+  dir: THREE.Vector3,
+  maxDist: number,
+): number {
+  let nearest = Infinity;
+  const invX = 1 / (dir.x || 1e-9);
+  const invY = 1 / (dir.y || 1e-9);
+  const invZ = 1 / (dir.z || 1e-9);
+  for (const box of OBSTACLE_AABBS) {
+    let t0 = (box.min.x - origin.x) * invX;
+    let t1 = (box.max.x - origin.x) * invX;
+    if (t0 > t1) [t0, t1] = [t1, t0];
+    let tmin = t0;
+    let tmax = t1;
+
+    t0 = (box.min.y - origin.y) * invY;
+    t1 = (box.max.y - origin.y) * invY;
+    if (t0 > t1) [t0, t1] = [t1, t0];
+    tmin = Math.max(tmin, t0);
+    tmax = Math.min(tmax, t1);
+    if (tmax < tmin) continue;
+
+    t0 = (box.min.z - origin.z) * invZ;
+    t1 = (box.max.z - origin.z) * invZ;
+    if (t0 > t1) [t0, t1] = [t1, t0];
+    tmin = Math.max(tmin, t0);
+    tmax = Math.min(tmax, t1);
+    if (tmax < tmin) continue;
+
+    if (tmin >= 0 && tmin <= maxDist && tmin < nearest) nearest = tmin;
+    // origin already inside the box
+    else if (tmin < 0 && tmax >= 0) return 0;
+  }
+  return nearest;
+}
+
+const losDir = new THREE.Vector3();
+
+/** True when nothing solid sits between `from` and `to`. */
+export function hasLineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
+  losDir.subVectors(to, from);
+  const dist = losDir.length();
+  if (dist < 0.001) return true;
+  losDir.multiplyScalar(1 / dist);
+  // shave the ends so bodies touching a wall are not blocked by their own cover
+  return rayObstacleDistance(from, losDir, dist - 0.15) === Infinity;
+}
+
+/** Returns the jump pad under an xz point, if the body is close to its surface. */
+export function jumpPadAt(x: number, z: number, feetY: number) {
+  for (const pad of JUMP_PADS) {
+    const dx = x - pad.position[0];
+    const dz = z - pad.position[1];
+    if (dx * dx + dz * dz > pad.radius * pad.radius) continue;
+    const padY = groundHeightAt(pad.position[0], pad.position[1], 3);
+    if (Math.abs(feetY - padY) < 0.4) return pad;
+  }
+  return null;
 }
