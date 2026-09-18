@@ -1,6 +1,61 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { ARENA_HALF, OBSTACLES, WALL_HEIGHT } from './config';
+import { ARENA_HALF, JUMP_PADS, OBSTACLES, WALL_HEIGHT } from './config';
+import { groundHeightAt } from './physics';
+import { runtime } from './runtime';
+
+const noRaycast = () => null;
+
+function PadRings({ radius, seed }: { radius: number; seed: number }) {
+  const group = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const g = group.current;
+    if (!g) return;
+    g.children.forEach((child, i) => {
+      const t = (runtime.elapsed * 0.9 + i * 0.33 + seed) % 1;
+      child.position.y = t * 2.4;
+      child.scale.setScalar(1 - t * 0.45);
+      const m = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
+      m.opacity = (1 - t) * 0.7;
+    });
+  });
+  return (
+    <group ref={group}>
+      {[0, 1, 2].map((k) => (
+        <mesh key={k} rotation={[-Math.PI / 2, 0, 0]} raycast={noRaycast}>
+          <ringGeometry args={[radius * 0.5, radius * 0.62, 20]} />
+          <meshBasicMaterial color="#4ade80" toneMapped={false} transparent opacity={0.5} depthWrite={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function JumpPads() {
+  return (
+    <group>
+      {JUMP_PADS.map((pad, i) => {
+        const y = groundHeightAt(pad.position[0], pad.position[1], 3);
+        return (
+          <group key={i} position={[pad.position[0], y + 0.02, pad.position[1]]}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              <circleGeometry args={[pad.radius, 28]} />
+              <meshStandardMaterial color="#052e16" emissive="#22c55e" emissiveIntensity={0.7} roughness={0.5} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} raycast={noRaycast}>
+              <ringGeometry args={[pad.radius * 0.72, pad.radius * 0.92, 28]} />
+              <meshBasicMaterial color="#86efac" toneMapped={false} transparent opacity={0.85} />
+            </mesh>
+            {/* rising rings that advertise what the pad does */}
+            <PadRings radius={pad.radius} seed={i * 0.21} />
+            <pointLight color="#22c55e" intensity={6} distance={7} decay={2} position={[0, 1, 0]} />
+          </group>
+        );
+      })}
+    </group>
+  );
+}
 
 function Floor() {
   const texture = useMemo(() => {
@@ -169,6 +224,7 @@ export function World() {
       <Floor />
       <Walls />
       <Obstacles />
+      <JumpPads />
     </group>
   );
 }

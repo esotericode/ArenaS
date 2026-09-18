@@ -3,26 +3,42 @@ import { useRef } from 'react';
 import { SPAWN_POINTS, WAVES, type EnemyTypeId } from './config';
 import { runtime } from './runtime';
 import { useGame } from './store';
+import { audio } from './audio';
 
 /**
  * Drives wave progression:
- *  intermission  -> (timer)   -> nextWave() -> spawning
+ *  intermission  -> (timer)     -> nextWave() -> spawning
  *  spawning      -> queue empty -> active
- *  active        -> all enemies dead -> intermission
+ *  active        -> all dead    -> augment pick -> intermission
  */
 export function WaveDirector() {
   const queue = useRef<EnemyTypeId[]>([]);
   const nextSpawnAt = useRef(0);
   const lastRunId = useRef<number>(-1);
   const lastFarSpawn = useRef(0);
+  /** set when a wave is cleared; the augment panel opens once it elapses */
+  const offerAt = useRef<number | null>(null);
 
   useFrame(() => {
     const st = useGame.getState();
+
+    // ─── music intensity follows the fight ──────────────────────────
+    if (st.status === 'menu' || st.status === 'gameover') {
+      audio.setIntensity(st.status === 'menu' ? 0.12 : 0);
+    } else if (st.status === 'augment' || st.status === 'paused') {
+      audio.setIntensity(0.25);
+    } else if (st.waveState === 'intermission') {
+      audio.setIntensity(0.25);
+    } else {
+      const boss = st.bossId !== null;
+      audio.setIntensity(boss ? 1 : Math.min(0.92, 0.5 + st.wave * 0.04));
+    }
 
     // detect fresh game start (timeStarted changes per run) – reset director
     if (st.status === 'playing' && st.timeStarted !== lastRunId.current) {
       lastRunId.current = st.timeStarted;
       queue.current = [];
+      offerAt.current = null;
       st.setWaveState('intermission', runtime.elapsed + 3);
     }
     if (st.status !== 'playing') return;
@@ -30,6 +46,13 @@ export function WaveDirector() {
     const now = runtime.elapsed;
     st.pruneMessages(now);
     st.expirePickups(now);
+
+    // a cleared wave hands out an augment before the countdown resumes
+    if (offerAt.current !== null && now >= offerAt.current) {
+      offerAt.current = null;
+      st.rollAugments();
+      return;
+    }
 
     switch (st.waveState) {
       case 'intermission': {
@@ -62,7 +85,8 @@ export function WaveDirector() {
           lastFarSpawn.current = (lastFarSpawn.current + 3) % SPAWN_POINTS.length;
           const jitter = () => (Math.random() - 0.5) * 3;
           st.spawnEnemy(type, [best[0] + jitter(), 0, best[1] + jitter()]);
-          nextSpawnAt.current = now + WAVES.spawnInterval * (type === 'brute' ? 1.6 : 1);
+          const gap = type === 'warden' ? 2.4 : type === 'brute' ? 1.6 : 1;
+          nextSpawnAt.current = now + WAVES.spawnInterval * gap;
         }
         break;
       }
@@ -70,6 +94,12 @@ export function WaveDirector() {
         if (st.enemies.length === 0) {
           st.setWaveState('intermission', now + WAVES.intermissionSeconds);
           st.pushMessage('WAVE CLEARED', `Next wave in ${WAVES.intermissionSeconds}s`, 3);
+          audio.waveClear();
+          // Overdrive augment: a few seconds of slow motion as a victory lap
+          if (runtime.mods.overdrive > 0) {
+            runtime.slowMo = Math.max(runtime.slowMo, runtime.mods.overdrive);
+          }
+          offerAt.current = now + 1.1;
         }
         break;
       }

@@ -5,20 +5,39 @@ import { PICKUPS, PLAYER } from './config';
 import { runtime } from './runtime';
 import { useGame, type PickupData } from './store';
 import { groundHeightAt } from './physics';
+import { fx } from './Effects';
+
+const noRaycast = () => null;
 
 function Pickup({ data }: { data: PickupData }) {
   const group = useRef<THREE.Group>(null);
   const inner = useRef<THREE.Group>(null);
+  const drift = useRef(new THREE.Vector3(data.position[0], 0, data.position[2]));
   const isHealth = data.kind === 'health';
   const color = isHealth ? '#4ade80' : '#facc15';
   const baseY = groundHeightAt(data.position[0], data.position[2], data.position[1] + 0.5);
 
-  useFrame(() => {
+  useFrame((_, rawDt) => {
     const st = useGame.getState();
     const g = group.current;
     if (!g) return;
+    const dt = Math.min(rawDt, 1 / 30) * runtime.timeScale;
     const t = runtime.elapsed;
-    g.position.set(data.position[0], baseY + 0.6 + Math.sin(t * 3 + data.id) * 0.15, data.position[2]);
+    const radius = PICKUPS.collectRadius + runtime.mods.pickupRadiusAdd;
+
+    // Scavenger's wider radius also pulls loot toward you
+    if (st.status === 'playing' && runtime.mods.pickupRadiusAdd > 0) {
+      const dx = runtime.playerPos.x - drift.current.x;
+      const dz = runtime.playerPos.z - drift.current.z;
+      const d = Math.hypot(dx, dz);
+      if (d < radius * 1.6 && d > 0.05) {
+        const pull = Math.min(1, (radius * 1.6 - d) / (radius * 1.6)) * 9 * dt;
+        drift.current.x += (dx / d) * pull;
+        drift.current.z += (dz / d) * pull;
+      }
+    }
+
+    g.position.set(drift.current.x, baseY + 0.6 + Math.sin(t * 3 + data.id) * 0.15, drift.current.z);
     if (inner.current) inner.current.rotation.y = t * 2 + data.id;
     // blink when about to expire
     const age = t - data.createdAt;
@@ -28,7 +47,8 @@ function Pickup({ data }: { data: PickupData }) {
     const dx = runtime.playerPos.x - g.position.x;
     const dz = runtime.playerPos.z - g.position.z;
     const dy = runtime.playerPos.y - PLAYER.eyeHeight - baseY;
-    if (dx * dx + dz * dz < PICKUPS.collectRadius * PICKUPS.collectRadius && Math.abs(dy) < 2) {
+    if (dx * dx + dz * dz < radius * radius && Math.abs(dy) < 2) {
+      fx.burst(g.position, color, 14, 4, 0.08, -3);
       st.collectPickup(data.id);
     }
   });
@@ -49,7 +69,7 @@ function Pickup({ data }: { data: PickupData }) {
           </>
         ) : (
           <>
-            <mesh rotation={[0, 0, 0]}>
+            <mesh>
               <cylinderGeometry args={[0.12, 0.12, 0.5, 10]} />
               <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.9} metalness={0.6} />
             </mesh>
@@ -59,7 +79,7 @@ function Pickup({ data }: { data: PickupData }) {
             </mesh>
           </>
         )}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.45, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.45, 0]} raycast={noRaycast}>
           <ringGeometry args={[0.35, 0.45, 24]} />
           <meshBasicMaterial color={color} transparent opacity={0.6} toneMapped={false} side={THREE.DoubleSide} />
         </mesh>

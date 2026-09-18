@@ -1,0 +1,92 @@
+name: Release
+
+# Publishes the playable build. `npm run build` inlines every script, style and
+# generated asset into one HTML file, so the release artifact is the whole game:
+# download it, open it in a browser, play.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v2.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Package the playable build
+        run: |
+          mkdir -p release
+          cp dist/index.html release/neon-siege.html
+          ls -lh release/
+
+      - name: Write release notes
+        run: |
+          cat > RELEASE_NOTES.md <<'NOTES'
+          ## Play it
+
+          Download **`neon-siege.html`** below and open it in a desktop browser.
+          That single file is the entire game — no install, no server, no assets
+          to download. Click **Deploy** to lock the mouse pointer and you are in.
+
+          Chrome, Edge or Firefox on desktop. A mouse is required (pointer lock),
+          and there is no touch support.
+
+          ## Controls
+
+          | | |
+          |---|---|
+          | `W` `A` `S` `D` | Move |
+          | Mouse | Look / aim |
+          | `LMB` | Fire |
+          | `Space` | Jump |
+          | `Shift` | Sprint |
+          | `RMB` / `Ctrl` | Dash |
+          | `1` `2` `3` | Weapons |
+          | `Q` / wheel | Quick swap |
+          | `R` | Reload |
+          | `Esc` | Pause |
+          | `M` | Mute |
+
+          ## What's in it
+
+          Hold an arena against escalating waves. Three weapons that unlock as the
+          siege goes on, a dash with i-frames, jump pads, a roguelite augment pick
+          after every cleared wave, and a Warden boss every fifth one. Every sound
+          and texture is generated at runtime.
+
+          See [HANDOFF.md](https://github.com/esotericode/ArenaS/blob/main/HANDOFF.md)
+          for the architecture and the state of play.
+          NOTES
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" release/neon-siege.html \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Neon Siege $TAG" \
+            --notes-file RELEASE_NOTES.md
