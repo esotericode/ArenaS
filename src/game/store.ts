@@ -124,7 +124,6 @@ interface GameState {
     amount: number,
     opts?: { headshot?: boolean; crit?: boolean; chain?: number; silent?: boolean },
   ) => void;
-  removeEnemy: (id: number) => void;
 
   addPickup: (kind: 'health' | 'ammo', position: [number, number, number]) => void;
   collectPickup: (id: number) => void;
@@ -456,14 +455,6 @@ export const useGame = create<GameState>((set, get) => ({
       });
     }
   },
-  removeEnemy: (id) => {
-    runtime.enemies.delete(id);
-    set((s) => ({
-      enemies: s.enemies.filter((x) => x.id !== id),
-      bossId: s.bossId === id ? null : s.bossId,
-    }));
-  },
-
   addPickup: (kind, position) =>
     set((s) => ({
       pickups: [...s.pickups, { id: uid(), kind, position, createdAt: runtime.elapsed }],

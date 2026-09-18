@@ -118,6 +118,20 @@ fakes `document.pointerLockElement`, without which the player cannot look, move 
 fire), and software rendering is slow enough that `runtime.elapsed` crawls — poll for
 the state you want, never assert on wall-clock timing.
 
+## Releasing
+
+`npm run build` inlines everything into a single `dist/index.html`, so the playable
+artifact is one file. `.github/workflows/release.yml` builds it, renames it to
+`neon-siege.html` and attaches it to a GitHub Release.
+
+```bash
+git tag v2.1.0 && git push origin v2.1.0   # tag push publishes the release
+```
+
+It also accepts a manual `workflow_dispatch` with a `tag` input. The job type-checks
+before building, so a broken tree fails the release instead of publishing it. Keep the
+tag and `package.json`'s `version` in step.
+
 ## Known rough edges / bugs to look at
 - Enemies have no pathfinding. They walk straight at you and rely on stuck-detection
   to hop obstacles, so deeply concave cover can still hold them up.

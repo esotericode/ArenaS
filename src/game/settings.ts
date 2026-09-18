@@ -1,6 +1,7 @@
 /**
  * User settings, persisted to localStorage. Read directly (not via React) by
- * the per-frame systems; the UI mutates them through `updateSettings`.
+ * the per-frame systems, which pick changes up on their next frame; the UI
+ * mutates them through `updateSettings` and re-renders itself.
  */
 export interface Settings {
   sensitivity: number;
@@ -35,16 +36,6 @@ function load(): Settings {
 
 export const settings: Settings = load();
 
-/** Listeners fire after any change so React panels and the camera can react. */
-const listeners = new Set<() => void>();
-
-export function onSettingsChange(fn: () => void) {
-  listeners.add(fn);
-  return () => {
-    listeners.delete(fn);
-  };
-}
-
 export function updateSettings(patch: Partial<Settings>) {
   Object.assign(settings, patch);
   try {
@@ -52,7 +43,6 @@ export function updateSettings(patch: Partial<Settings>) {
   } catch {
     /* ignore quota / private mode */
   }
-  listeners.forEach((fn) => fn());
 }
 
 export function resetSettings() {

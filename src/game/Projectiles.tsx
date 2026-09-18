@@ -8,7 +8,7 @@ import { useGame } from './store';
 import { fx } from './Effects';
 import { audio } from './audio';
 
-export interface Projectile {
+interface Projectile {
   pos: THREE.Vector3;
   vel: THREE.Vector3;
   radius: number;
@@ -52,9 +52,6 @@ export const projectiles = {
   /** removes every live projectile — used on death / restart */
   clear() {
     list.length = 0;
-  },
-  get count() {
-    return list.length;
   },
 };
 

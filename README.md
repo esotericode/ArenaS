@@ -14,6 +14,10 @@ npm run build   # single self-contained dist/index.html
 npm run smoke   # headless playthrough that fails on any console error
 ```
 
+The latest playable build is attached to the
+[newest release](https://github.com/esotericode/ArenaS/releases/latest) as a single
+`neon-siege.html` — download it and open it in a desktop browser.
+
 **Controls** — WASD move · Mouse look · LMB fire · Space jump · Shift sprint ·
 RMB / Ctrl dash · 1/2/3 weapons · Q or wheel quick swap · R reload · Esc pause · M mute
 
