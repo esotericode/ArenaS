@@ -42,13 +42,17 @@ export function Player() {
 
     const onKeyDown = (e: KeyboardEvent) => {
       const st = useGame.getState();
-      if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
+      const playing = st.status === 'playing';
+      // Only swallow Space/Tab during play. Doing it unconditionally stopped
+      // Space from activating focused buttons and Tab from moving focus, which
+      // made the menus unusable from the keyboard.
+      if (playing && (e.code === 'Space' || e.code === 'Tab')) e.preventDefault();
       if (e.repeat) return;
-      runtime.keys.add(e.code);
-      if (st.status !== 'playing') {
+      if (!playing) {
         if (e.code === 'KeyM') audio.setMuted(!audio.muted);
         return;
       }
+      runtime.keys.add(e.code);
       if (e.code === 'Space') jumpPressedAt.current = runtime.elapsed;
       if (e.code === 'KeyR') st.startReload();
       if (e.code === 'KeyM') audio.setMuted(!audio.muted);
@@ -89,20 +93,25 @@ export function Player() {
       e.preventDefault();
       st.cycleWeapon(e.deltaY > 0 ? 1 : -1);
     };
-    const onBlur = () => {
+    const clearInput = () => {
       runtime.keys.clear();
       runtime.mouseDown = false;
       runtime.mouseClicked = false;
+      dashQueued.current = false;
+      jumpPressedAt.current = -10;
     };
+    const onBlur = clearInput;
     const onPointerLockChange = () => {
       const st = useGame.getState();
       if (document.pointerLockElement !== gl.domElement) {
-        runtime.mouseDown = false;
-        runtime.mouseClicked = false;
-        runtime.keys.clear();
+        clearInput();
         if (st.status === 'playing') st.pause();
-      } else if (st.status === 'paused') {
-        st.resume();
+      } else {
+        // The click (or keypress) that acquired the lock is still "down" at this
+        // point — carrying it into the game fired a shot, or started a run
+        // already walking, the instant play resumed.
+        clearInput();
+        if (st.status === 'paused') st.resume();
       }
     };
     const onContext = (e: Event) => e.preventDefault();
@@ -143,10 +152,15 @@ export function Player() {
     }
     const mods = runtime.mods;
 
-    // global time scaling: hit-stop beats slow-mo
-    runtime.hitStop = Math.max(0, runtime.hitStop - real);
-    runtime.slowMo = Math.max(0, runtime.slowMo - real);
-    runtime.timeScale = runtime.hitStop > 0 ? 0.04 : runtime.slowMo > 0 ? 0.4 : 1;
+    // Global time scaling: hit-stop beats slow-mo, and anything other than
+    // active play stops the clock outright so effects freeze with the world.
+    if (playing) {
+      runtime.hitStop = Math.max(0, runtime.hitStop - real);
+      runtime.slowMo = Math.max(0, runtime.slowMo - real);
+      runtime.timeScale = runtime.hitStop > 0 ? 0.04 : runtime.slowMo > 0 ? 0.4 : 1;
+    } else {
+      runtime.timeScale = 0;
+    }
 
     const dt = Math.min(rawDt, 1 / 30) * runtime.timeScale;
     if (playing) runtime.elapsed += dt;
@@ -264,8 +278,6 @@ export function Player() {
       const horizSpeed = Math.hypot(vel.x, vel.z);
       if (b.grounded && horizSpeed > 0.5) bobTime.current += dt * horizSpeed * 1.6;
 
-      runtime.shake = Math.max(0, runtime.shake - dt * 2.2);
-      runtime.recoil = Math.max(0, runtime.recoil - dt * 0.25);
       runtime.invuln = Math.max(0, runtime.invuln - dt);
       runtime.playerGrounded = b.grounded;
 
@@ -295,6 +307,14 @@ export function Player() {
     }
 
     runtime.playerPos.set(b.feet.x, b.feet.y + PLAYER.eyeHeight, b.feet.z);
+
+    // Camera shake and recoil are applied every frame, so they have to settle
+    // every frame too — on the game clock while playing (hit-stop holds the
+    // punch) and on the real one once the run is over, or the menus inherit a
+    // camera that never stops twitching.
+    const settle = playing ? dt : real;
+    runtime.shake = Math.max(0, runtime.shake - settle * 2.2);
+    runtime.recoil = Math.max(0, runtime.recoil - settle * 0.25);
 
     // ─── camera ────────────────────────────────────────────────────
     const bob = Math.sin(bobTime.current) * 0.035;

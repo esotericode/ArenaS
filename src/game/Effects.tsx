@@ -87,6 +87,7 @@ export const fx = {
 
 // ─── Renderer ────────────────────────────────────────────────────────
 const dummy = new THREE.Object3D();
+const scratchColor = new THREE.Color();
 const up = new THREE.Vector3(0, 1, 0);
 const dir = new THREE.Vector3();
 const mid = new THREE.Vector3();
@@ -106,8 +107,9 @@ export function Effects() {
   }, []);
 
   useFrame((_, dt) => {
-    // FX follow game time so hit-stop and slow-mo read correctly
-    const d = Math.min(dt, 0.05) * Math.max(runtime.timeScale, 0.02);
+    // FX follow game time, so hit-stop slows them, and a paused game
+    // (timeScale 0) leaves them exactly where they were.
+    const d = Math.min(dt, 0.05) * runtime.timeScale;
 
     // particles
     const inst = instRef.current;
@@ -184,7 +186,7 @@ export function Effects() {
         dummy.scale.set(scale, scale, 1);
         dummy.updateMatrix();
         ri.setMatrixAt(n, dummy.matrix);
-        ri.setColorAt(n, r.color.clone().multiplyScalar(1 - t));
+        ri.setColorAt(n, scratchColor.copy(r.color).multiplyScalar(1 - t));
       }
       ri.count = n;
       ri.instanceMatrix.needsUpdate = true;
@@ -211,7 +213,7 @@ export function Effects() {
         dummy.scale.set(b.width * t, len, b.width * t);
         dummy.updateMatrix();
         bi.setMatrixAt(n, dummy.matrix);
-        bi.setColorAt(n, b.color.clone().multiplyScalar(0.4 + t * 0.6));
+        bi.setColorAt(n, scratchColor.copy(b.color).multiplyScalar(0.4 + t * 0.6));
       }
       bi.count = n;
       bi.instanceMatrix.needsUpdate = true;

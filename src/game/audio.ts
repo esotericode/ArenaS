@@ -19,6 +19,7 @@ class AudioEngine {
   private nextNoteTime = 0;
   private intensity = 0;
   private targetIntensity = 0;
+  private muteListeners = new Set<() => void>();
   muted = false;
 
   init() {
@@ -61,6 +62,15 @@ class AudioEngine {
   setMuted(m: boolean) {
     this.muted = m;
     this.applyVolume();
+    this.muteListeners.forEach((fn) => fn());
+  }
+
+  /** Lets the UI follow mute changes made with the M key. */
+  onMuteChange(fn: () => void) {
+    this.muteListeners.add(fn);
+    return () => {
+      this.muteListeners.delete(fn);
+    };
   }
 
   /** Called by the settings panel whenever the volume slider moves. */
@@ -103,6 +113,9 @@ class AudioEngine {
     this.musicFilter.frequency.setTargetAtTime(280 + i * 1700, ctx.currentTime, 0.4);
 
     const beat = 0.24 - i * 0.04;
+    // Background tabs throttle timers while the audio clock keeps going; without
+    // this the catch-up loop would fire every missed note at once on return.
+    if (this.nextNoteTime < ctx.currentTime) this.nextNoteTime = ctx.currentTime + 0.05;
     while (this.nextNoteTime < ctx.currentTime + 0.25) {
       const t = this.nextNoteTime;
       const semi = AudioEngine.BASS[this.step % AudioEngine.BASS.length];

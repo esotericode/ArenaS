@@ -149,11 +149,11 @@ function DamageDirections() {
   if (runtime.damageDirs.length === 0) return null;
   return (
     <div className="absolute left-1/2 top-1/2 h-0 w-0">
-      {runtime.damageDirs.map((d, i) => {
+      {runtime.damageDirs.map((d) => {
         const a = Math.max(0, 1 - d.life / 1.1);
         return (
           <div
-            key={i}
+            key={d.id}
             className="absolute"
             style={{
               transform: `rotate(${(d.angle * 180) / Math.PI}deg) translateY(-96px)`,

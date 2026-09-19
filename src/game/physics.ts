@@ -196,7 +196,8 @@ export function hasLineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean 
   const dist = losDir.length();
   if (dist < 0.001) return true;
   losDir.multiplyScalar(1 / dist);
-  // shave the ends so bodies touching a wall are not blocked by their own cover
+  // stop just short of the target so cover the target is pressed against does
+  // not count as blocking it
   return rayObstacleDistance(from, losDir, dist - 0.15) === Infinity;
 }
 
