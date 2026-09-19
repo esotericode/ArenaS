@@ -76,6 +76,40 @@ the project. Read this before changing anything.
     arrows hung frozen on the death screen; ring and beam rendering allocated a `Color`
     per instance per frame.
 
+- **v2.2 (agent 2):** Aim calibration and frame-rate work.
+  - **Aim is now 1:1 with CS2.** `settings.sensitivity` is on the same scale as CS2's:
+    1 here turns exactly as 1 does there at the same mouse DPI, so eDPI and cm/360
+    carry across unchanged. The old scale was an opaque multiplier that ran ~5.7x
+    faster (9.1 cm/360 at 800 DPI, where CS2 sens 1 is 51.95 cm).
+  - Stored settings carry a `version`; v1 saves reset `sensitivity` to the new default,
+    because the old number means nothing on the new scale.
+  - Pointer lock now **detects** whether it was granted raw input instead of falling
+    back silently, and the settings panel says which one you have.
+  - Enemies stop casting shadows past `ENEMY_SHADOW_DISTANCE`. With 40 distant enemies
+    that is 481 -> 216 draw calls per frame (-55%) and 51k -> 18k triangles.
+  - The HUD re-render and the radar redraw are capped (120Hz / 60Hz) so a high-refresh
+    display does not spend frame time reconciling React for numbers nobody reads that
+    fast. The 3D scene still renders every frame.
+
+## Aim: the 1:1 contract
+
+`RADIANS_PER_COUNT = 0.022 * PI / 180` in `config.ts` is the Source-engine `m_yaw`
+constant. `Player.tsx` does `yaw -= movementX * sensitivity * RADIANS_PER_COUNT`, and
+pitch uses the same constant (CS2's `m_pitch` is also 0.022). **Do not add smoothing,
+easing, or any per-frame accumulation to that path** — it is applied straight from the
+mouse event. Regression checks assert both the exact degrees-per-count and that 900
+counts in one event equal 300 events of 3 counts.
+
+The 1:1 claim depends on `movementX` being raw mouse counts, which holds only under
+Chromium: it grants `unadjustedMovement` (no OS pointer acceleration) and reports
+`movementX` in physical pixels, unscaled by display scaling or page zoom. Firefox and
+Safari reject `unadjustedMovement`, apply OS acceleration, and report CSS pixels scaled
+by `devicePixelRatio` — they cannot be matched exactly, and the settings panel says so
+rather than pretending otherwise. `isRawInput()` in `pointerLock.ts` is the source of truth.
+
+cm/360 is independent of FOV, so the match holds at any field of view. FOV still changes
+how tracking *feels* (monitor-distance matching); the slider is there for that.
+
 ## Architecture
 
 ```
@@ -182,8 +216,10 @@ tag and `package.json`'s `version` in step.
   all if the pool is empty (the panel is then skipped silently).
 - Damage numbers are DOM nodes projected from world space, capped at 40. A much bigger
   crowd would want an instanced/canvas approach.
-- Shadows from many enemies are still heavy on low-end GPUs; consider disabling
-  `castShadow` past some enemy count.
+- Frame rate is capped by the display's refresh through `requestAnimationFrame` — a
+  browser cannot run faster than vsync. What GPU cost remains is dominated by the single
+  shadow-casting directional light (2048 map) and MSAA at `dpr` up to 1.75. Those are the
+  next knobs, ideally behind a quality setting rather than lowered for everyone.
 - Reload and fire timers run on game time, so reloading during Overdrive takes longer
   in real seconds. Intentional, but it can feel sluggish.
 - No mobile / touch support.

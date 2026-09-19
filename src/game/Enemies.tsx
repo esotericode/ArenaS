@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { ENEMY_TYPES, PLAYER, type EnemyType } from './config';
+import { ENEMY_SHADOW_DISTANCE, ENEMY_TYPES, PLAYER, type EnemyType } from './config';
 import { runtime, type EnemyRuntime } from './runtime';
 import { hasLineOfSight, rayObstacleDistance, resolveBody, type BodyState } from './physics';
 import { useGame, type EnemyData } from './store';
@@ -155,6 +155,9 @@ function Enemy({ data }: { data: EnemyData }) {
   const strafeDir = useRef(Math.random() < 0.5 ? 1 : -1);
   const strafeFlipAt = useRef(0);
   const walkPhase = useRef(Math.random() * Math.PI * 2);
+  /** meshes that shipped with castShadow on, so culling can put them back */
+  const shadowCasters = useRef<THREE.Mesh[] | null>(null);
+  const castingShadows = useRef(true);
   const spawnTime = def.boss ? 1.8 : 0.8;
 
   const body = useMemo<BodyState>(
@@ -389,6 +392,27 @@ function Enemy({ data }: { data: EnemyData }) {
     // ─── visuals ──────────────────────────────────────────────────
     g.position.copy(body.feet);
     const v = visual.current;
+
+    // Shadow-map rendering is the single biggest cost once a wave gets large, and
+    // a distant enemy's shadow is a few pixels. Drop them past a radius.
+    if (v) {
+      if (!shadowCasters.current) {
+        const list: THREE.Mesh[] = [];
+        v.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (m.isMesh && m.castShadow) list.push(m);
+        });
+        shadowCasters.current = list;
+      }
+      const dx = body.feet.x - runtime.playerPos.x;
+      const dz = body.feet.z - runtime.playerPos.z;
+      const near = dx * dx + dz * dz < ENEMY_SHADOW_DISTANCE * ENEMY_SHADOW_DISTANCE;
+      if (near !== castingShadows.current) {
+        castingShadows.current = near;
+        for (const m of shadowCasters.current) m.castShadow = near;
+      }
+    }
+
     if (v) {
       const hSpeed = Math.hypot(body.vel.x, body.vel.z);
       const bob = Math.abs(Math.sin(walkPhase.current)) * 0.08 * Math.min(1, hSpeed / 3);

@@ -29,6 +29,8 @@ export interface DamageNumber {
 export const runtime = {
   canvas: null as HTMLCanvasElement | null,
   camera: null as THREE.Camera | null,
+  /** debug handle — `renderer.info.render` is how to measure draw-call cost */
+  renderer: null as THREE.WebGLRenderer | null,
   playerPos: new THREE.Vector3(0, PLAYER.eyeHeight, 12),
   playerVel: new THREE.Vector3(),
   playerGrounded: false,

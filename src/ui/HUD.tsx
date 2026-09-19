@@ -7,18 +7,31 @@ import { magSizeFor } from '../game/weapons';
 import { settings } from '../game/settings';
 import { cn } from '../utils/cn';
 
-/** Re-render on every animation frame (HUD is lightweight). */
-function useTick() {
+/**
+ * Re-render the HUD on a capped clock.
+ *
+ * This drives a full React reconciliation, so letting it run at the display's
+ * refresh rate spends real time on a 240Hz monitor for numbers no one can read
+ * that fast. The 3D scene still renders every frame; only the overlay is capped.
+ */
+const HUD_HZ = 120;
+
+function useTick(hz: number) {
   const [, set] = useState(0);
   useEffect(() => {
     let id = 0;
-    const loop = () => {
-      set((n) => (n + 1) % 1_000_000);
+    let last = 0;
+    const interval = 1000 / hz;
+    const loop = (t: number) => {
+      if (t - last >= interval) {
+        last = t;
+        set((n) => (n + 1) % 1_000_000);
+      }
       id = requestAnimationFrame(loop);
     };
     id = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(id);
-  }, []);
+  }, [hz]);
 }
 
 const RADAR_COLORS: Record<string, string> = {
@@ -29,12 +42,18 @@ const RADAR_COLORS: Record<string, string> = {
   warden: '#fb7185',
 };
 
+const RADAR_HZ = 60;
+
 function Radar() {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let id = 0;
-    const draw = () => {
-      const c = ref.current;
+    let last = 0;
+    const interval = 1000 / RADAR_HZ;
+    const draw = (t: number) => {
+      const due = t - last >= interval;
+      if (due) last = t;
+      const c = due ? ref.current : null;
       if (c) {
         const ctx = c.getContext('2d')!;
         const S = c.width;
@@ -219,7 +238,7 @@ function WeaponSlots() {
 }
 
 export function HUD() {
-  useTick();
+  useTick(HUD_HZ);
   const s = useGame();
   const now = runtime.elapsed;
   const dmgAge = now - s.lastDamageAt;

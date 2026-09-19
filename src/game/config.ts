@@ -23,6 +23,30 @@ export const PLAYER = {
   jumpBuffer: 0.15,
 };
 
+// ─── Aim ──────────────────────────────────────────────────────
+/**
+ * Source-engine yaw constant: degrees of turn per mouse count at sensitivity 1.
+ * CS2 and CS:GO both use 0.022, so `settings.sensitivity` here is a 1:1 match
+ * for the same number in CS2 — same DPI gives the same eDPI and the same cm/360.
+ *
+ * This only holds while the browser hands us raw mouse counts. Chromium grants
+ * those through pointer lock's `unadjustedMovement` and reports `movementX` in
+ * physical pixels, unscaled by display scaling or page zoom. Firefox and Safari
+ * apply OS pointer acceleration and scale by devicePixelRatio, so they cannot be
+ * matched exactly — `isRawInput()` in pointerLock.ts reports which you have.
+ */
+export const M_YAW = 0.022;
+
+/** Radians of turn per mouse count at sensitivity 1. */
+export const RADIANS_PER_COUNT = (M_YAW * Math.PI) / 180;
+
+/** Centimetres of mouse travel for one full 360° turn. */
+export const cmPer360 = (sensitivity: number, dpi: number) =>
+  (360 * 2.54) / (dpi * sensitivity * M_YAW);
+
+/** Enemies stop casting shadows past this distance — shadow maps dominate the frame. */
+export const ENEMY_SHADOW_DISTANCE = 22;
+
 export const DASH = {
   speed: 22,
   duration: 0.16,

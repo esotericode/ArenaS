@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { DASH, PLAYER, WEAPON_ORDER } from './config';
+import { DASH, PLAYER, RADIANS_PER_COUNT, WEAPON_ORDER } from './config';
 import { runtime } from './runtime';
 import { jumpPadAt, resolveBody, type BodyState } from './physics';
 import { useGame } from './store';
@@ -10,7 +10,6 @@ import { fx } from './Effects';
 import { settings } from './settings';
 import { isLockPending } from './pointerLock';
 
-const BASE_SENS = 0.0022;
 const tmpDir = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
 const wish = new THREE.Vector3();
@@ -39,6 +38,7 @@ export function Player() {
   useEffect(() => {
     runtime.canvas = gl.domElement;
     runtime.camera = camera;
+    runtime.renderer = gl;
 
     const onKeyDown = (e: KeyboardEvent) => {
       const st = useGame.getState();
@@ -68,7 +68,8 @@ export function Player() {
     const onMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== gl.domElement) return;
       if (useGame.getState().status !== 'playing') return;
-      const sens = BASE_SENS * settings.sensitivity;
+      // sensitivity is CS2-equivalent: counts * sens * m_yaw, in radians
+      const sens = settings.sensitivity * RADIANS_PER_COUNT;
       runtime.yaw -= e.movementX * sens;
       runtime.pitch -= e.movementY * sens * (settings.invertY ? -1 : 1);
       const lim = Math.PI / 2 - 0.01;

@@ -243,6 +243,52 @@ const hurt = await until((s) => s.health < 100 || s.status === 'gameover', 60000
 check('enemies damage the player', !!hurt, hurt ? `health ${hurt.health}` : 'timed out');
 await page.screenshot({ path: `${OUT}/06-combat.png` });
 
+// ── aim scale: must be 1:1 with CS2 (m_yaw 0.022 deg per count at sens 1) ──
+await page.evaluate(() => window.__game.setState({ status: 'playing' }));
+const aim = await page.evaluate(() => {
+  const COUNTS = 4000;
+  const rt = window.__runtime;
+  const yaw0 = rt.yaw;
+  const pitch0 = rt.pitch;
+  rt.pitch = 0; // keep away from the +/-90 clamp
+  window.dispatchEvent(new MouseEvent('mousemove', { movementX: COUNTS, movementY: 0 }));
+  const yawDeg = ((yaw0 - rt.yaw) * 180) / Math.PI;
+  rt.yaw = yaw0;
+  // vertical uses the same constant
+  window.dispatchEvent(new MouseEvent('mousemove', { movementX: 0, movementY: COUNTS }));
+  const pitchDeg = ((0 - rt.pitch) * 180) / Math.PI;
+  rt.pitch = pitch0;
+  return { perCountYaw: yawDeg / COUNTS, perCountPitch: pitchDeg / COUNTS };
+});
+const M_YAW = 0.022;
+check(
+  'aim is 1:1 with CS2 sens 1',
+  Math.abs(aim.perCountYaw - M_YAW) < 1e-9 && Math.abs(aim.perCountPitch - M_YAW) < 1e-9,
+  `${aim.perCountYaw.toFixed(6)} deg/count yaw, ${aim.perCountPitch.toFixed(6)} pitch (want ${M_YAW})`,
+);
+// 16363.6 counts is a full turn at sens 1; at 800 DPI that is 51.95 cm/360
+const cm360 = (360 * 2.54) / (800 * 1 * aim.perCountYaw);
+check('cm/360 matches CS2 at 800 DPI', Math.abs(cm360 - 51.95) < 0.05, `${cm360.toFixed(2)} cm`);
+
+// aim must stay linear — no acceleration, so N counts in one event equals N
+// counts spread over many events
+const linear = await page.evaluate(() => {
+  const rt = window.__runtime;
+  const start = rt.yaw;
+  window.dispatchEvent(new MouseEvent('mousemove', { movementX: 900 }));
+  const oneBig = start - rt.yaw;
+  rt.yaw = start;
+  for (let i = 0; i < 300; i++) window.dispatchEvent(new MouseEvent('mousemove', { movementX: 3 }));
+  const manySmall = start - rt.yaw;
+  rt.yaw = start;
+  return { oneBig, manySmall };
+});
+check(
+  'aim is acceleration-free (linear in counts)',
+  Math.abs(linear.oneBig - linear.manySmall) < 1e-9,
+  `${linear.oneBig.toFixed(6)} vs ${linear.manySmall.toFixed(6)} rad`,
+);
+
 // ── regression checks for previously-fixed bugs ───────────────────────
 // Held input used to survive the pointer-lock handshake, so the click that
 // resumed a run fired a shot the instant play came back.
