@@ -12,6 +12,8 @@ const raycaster = new THREE.Raycaster();
 const shootDir = new THREE.Vector3();
 const muzzleWorld = new THREE.Vector3();
 const camQuat = new THREE.Quaternion();
+const camRight = new THREE.Vector3();
+const camUp = new THREE.Vector3();
 const offset = new THREE.Vector3();
 const targetPos = new THREE.Vector3();
 const endPoint = new THREE.Vector3();
@@ -176,16 +178,21 @@ export function Weapon() {
     const moveFactor =
       (runtime.playerGrounded ? Math.min(1, speed / 10) : 1.4) * wd.moveSpread;
 
+    // spread axes come from the camera, so the cone stays circular around the
+    // crosshair at any pitch
+    camera.getWorldQuaternion(camQuat);
+    camRight.set(1, 0, 0).applyQuaternion(camQuat);
+    camUp.set(0, 1, 0).applyQuaternion(camQuat);
+
     for (let p = 0; p < wd.pellets; p++) {
       camera.getWorldDirection(shootDir);
       const spread = wd.spread + moveFactor;
       if (spread > 0) {
-        // cone spread — square root keeps the distribution even across the disc
+        // square root keeps the distribution even across the disc
         const ang = Math.random() * Math.PI * 2;
         const r = Math.sqrt(Math.random()) * spread;
-        shootDir.x += Math.cos(ang) * r;
-        shootDir.y += Math.sin(ang) * r;
-        shootDir.z += (Math.random() - 0.5) * spread * 0.4;
+        shootDir.addScaledVector(camRight, Math.cos(ang) * r);
+        shootDir.addScaledVector(camUp, Math.sin(ang) * r);
         shootDir.normalize();
       }
 

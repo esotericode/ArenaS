@@ -144,7 +144,10 @@ function Enemy({ data }: { data: EnemyData }) {
   const hpGroup = useRef<THREE.Group>(null);
   const spawnedAt = useRef(runtime.elapsed);
   const lastAttack = useRef(-10);
-  const lastRanged = useRef(-2 - Math.random() * 2);
+  // Seeded from the spawn moment (not a fixed time in the past) so the first
+  // volley lands one cooldown *after* spawning, with a random offset that keeps
+  // a group of spitters from firing in lockstep.
+  const lastRanged = useRef(runtime.elapsed + Math.random() * 1.4);
   const burstLeft = useRef(0);
   const nextBurstShot = useRef(0);
   const lunge = useRef(0);
@@ -397,7 +400,7 @@ function Enemy({ data }: { data: EnemyData }) {
       v.rotation.z = Math.sin(walkPhase.current * 0.5) * 0.06 * Math.min(1, hSpeed / 3);
     }
     if (bodyMat.current && rt) {
-      rt.hitFlash = Math.max(0, rt.hitFlash - Math.min(rawDt, 1 / 30) * 6);
+      rt.hitFlash = Math.max(0, rt.hitFlash - dt * 6);
       rt.hpFrac = Math.max(0, data.hp / data.maxHp);
       const pulse = 0.55 + Math.sin(runtime.elapsed * (enraged ? 11 : 4) + data.id) * (enraged ? 0.4 : 0.15);
       bodyMat.current.emissiveIntensity = pulse + rt.hitFlash * 3;

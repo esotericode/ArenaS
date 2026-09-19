@@ -17,7 +17,7 @@ interface Projectile {
   life: number;
   maxLife: number;
   gravity: number;
-  /** enemy id that fired it (so it never hits its owner) */
+  /** id of whatever fired it — enemy bolts only collide with the player and the world */
   owner: number;
 }
 

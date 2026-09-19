@@ -41,6 +41,41 @@ the project. Read this before changing anything.
   - **Tooling:** `npm run smoke` — a headless Playwright run that drives the game
     through every major state and fails on any console error.
 
+- **v2.1 (agent 2):** Bugfix and polish pass — no new mechanics. Fourteen defects,
+  each one reasoned from the code and, where it could be observed from outside,
+  pinned by a regression check in `npm run smoke`.
+  - **Input survived the pointer-lock handshake.** `pointerlockchange` cleared held
+    keys and buttons when the lock was *lost* but not when it was *gained*, so the
+    click that started or resumed a run was still down on the first live frame —
+    firing a shot, and starting you already walking if you had a key down.
+  - **Space and Tab were swallowed unconditionally**, so neither could activate a
+    focused button nor move focus in the menus. They are only intercepted in play now.
+  - **The world clock never stopped.** `timeScale` was derived only from hit-stop and
+    slow-mo, so it sat at 1 while paused: particles and tracers kept flying behind the
+    pause and augment panels, and a paused Overdrive burned its slow-motion in real time.
+  - **Screen shake and recoil never settled** once a run ended — they were decayed
+    inside the `playing` branch but applied to the camera every frame, so the camera
+    twitched forever through the game-over panel and back on the title screen.
+  - **Weapon spread was built on world axes**, so the cone skewed and degenerated as
+    you looked up or down. Worst on the nine-pellet Scatter Cannon. It now comes off
+    the camera's own right/up vectors and stays circular at any pitch.
+  - **Every Spitter in a wave fired in unison, instantly.** Their ranged cooldown was
+    seeded with a fixed time in the past, so it read as already expired the moment they
+    finished materialising. It is seeded from the spawn moment with a random offset now.
+  - **The Rail Driver lived in pity-drop mode.** The bonus ammo drop triggered below a
+    flat reserve of 30, but the Rail's entire reserve caps at 20 — so carrying it
+    doubled the drop rate for the whole run. The threshold scales to the weapon.
+  - **Damage-direction arrows were keyed by array index** while entries are spliced out
+    of the middle, so React reused one hit's node for another and the arrows jumped.
+  - **The sound label desynced from the M key** (the menu kept a private copy of the
+    mute flag), and muting from the menu then took two clicks to undo.
+  - **The music burst on return from a backgrounded tab** — throttled timers plus a running
+    audio clock meant the catch-up loop replayed every missed note at once.
+  - Smaller: a pending pointer-lock retry could recapture the mouse on the game-over
+    screen; hit flash decayed on real time instead of game time; damage numbers and hit
+    arrows hung frozen on the death screen; ring and beam rendering allocated a `Color`
+    per instance per frame.
+
 ## Architecture
 
 ```
@@ -107,6 +142,11 @@ npm run dev     # play it
 npm run build   # production bundle (single inlined HTML file)
 npm run smoke   # headless playthrough — 12 checks, fails on any console error
 ```
+
+The suite covers the main states and then re-checks the specific bugs fixed in v2.1
+(input cleared on lock, the clock freezing when paused, menus keeping Space and Tab,
+shake settling after a run, the mute label following the M key). When you fix something
+observable from outside, add a check rather than trusting it to stay fixed.
 
 `npm run smoke` needs a Chromium binary. It auto-detects the one under
 `$PLAYWRIGHT_BROWSERS_PATH` (or `/opt/pw-browsers`), or set `CHROMIUM_PATH`. If it

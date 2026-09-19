@@ -243,6 +243,97 @@ const hurt = await until((s) => s.health < 100 || s.status === 'gameover', 60000
 check('enemies damage the player', !!hurt, hurt ? `health ${hurt.health}` : 'timed out');
 await page.screenshot({ path: `${OUT}/06-combat.png` });
 
+// ── regression checks for previously-fixed bugs ───────────────────────
+// Held input used to survive the pointer-lock handshake, so the click that
+// resumed a run fired a shot the instant play came back.
+await page.evaluate(() => window.__game.setState({ status: 'playing' }));
+const inputCleared = await page.evaluate(() => {
+  window.__runtime.mouseDown = true;
+  window.__runtime.mouseClicked = true;
+  window.__runtime.keys.add('KeyW');
+  document.dispatchEvent(new Event('pointerlockchange'));
+  return {
+    mouseDown: window.__runtime.mouseDown,
+    mouseClicked: window.__runtime.mouseClicked,
+    keys: window.__runtime.keys.size,
+  };
+});
+check(
+  'pointer lock clears held input',
+  !inputCleared.mouseDown && !inputCleared.mouseClicked && inputCleared.keys === 0,
+  JSON.stringify(inputCleared),
+);
+
+// The world clock only tracked hit-stop and slow-mo, so effects kept animating
+// behind the pause and augment panels.
+await page.evaluate(() => window.__game.setState({ status: 'paused' }));
+await page.waitForTimeout(600);
+const pausedScale = await page.evaluate(() => window.__runtime.timeScale);
+check('paused game freezes the clock', pausedScale === 0, `timeScale ${pausedScale}`);
+await page.evaluate(() => window.__game.setState({ status: 'playing' }));
+await page.waitForTimeout(300);
+const resumedScale = await page.evaluate(() => window.__runtime.timeScale);
+check('resuming restarts the clock', resumedScale === 1, `timeScale ${resumedScale}`);
+
+// Shake was decayed on the game clock but applied to the camera unconditionally,
+// so it never settled once a run ended.
+// Decay is per-frame, and the software renderer's frame rate swings wildly, so
+// polling for the end state is the only stable way to assert this. Waiting a
+// fixed wall-clock interval and checking the value is flaky by construction.
+await page.evaluate(() => {
+  window.__game.setState({ status: 'gameover' });
+  window.__runtime.shake = 1;
+  window.__runtime.recoil = 0.1;
+});
+let shakeSettled = null;
+const shakeDeadline = Date.now() + 20000;
+while (Date.now() < shakeDeadline) {
+  await new Promise((r) => setTimeout(r, 250));
+  shakeSettled = await page.evaluate(() => ({
+    shake: window.__runtime.shake,
+    recoil: window.__runtime.recoil,
+  }));
+  if (shakeSettled.shake === 0 && shakeSettled.recoil === 0) break;
+}
+check(
+  'shake settles after the run ends',
+  !!shakeSettled && shakeSettled.shake === 0 && shakeSettled.recoil === 0,
+  JSON.stringify(shakeSettled),
+);
+
+// Space/Tab were swallowed unconditionally, which broke keyboard use of menus.
+await page.evaluate(() => window.__game.setState({ status: 'menu' }));
+await page.waitForTimeout(300);
+const menuKeys = await page.evaluate(() => {
+  const fire = (code) => {
+    const ev = new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true });
+    window.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  };
+  return { tab: fire('Tab'), space: fire('Space') };
+});
+check('menus keep Tab and Space', !menuKeys.tab && !menuKeys.space, JSON.stringify(menuKeys));
+
+// The menu's sound label kept its own copy of the mute flag, so the M key
+// silenced the game without the button ever noticing.
+const muteLabel = await page.evaluate(async () => {
+  const label = () => {
+    const btn = [...document.querySelectorAll('button')].find((b) => /Sound:/.test(b.textContent));
+    return btn ? btn.textContent.trim() : null;
+  };
+  const before = label();
+  window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', bubbles: true }));
+  await new Promise((r) => setTimeout(r, 200));
+  const after = label();
+  window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', bubbles: true }));
+  return { before, after };
+});
+check(
+  'M key updates the sound label',
+  muteLabel.before !== null && muteLabel.before !== muteLabel.after,
+  `${muteLabel.before} -> ${muteLabel.after}`,
+);
+
 check('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 
 await browser.close();

@@ -20,6 +20,7 @@ import { audio } from './audio';
 import { fx } from './Effects';
 import { projectiles } from './Projectiles';
 import { magSizeFor } from './weapons';
+import { cancelLock } from './pointerLock';
 import * as THREE from 'three';
 
 export type GameStatus = 'menu' | 'playing' | 'paused' | 'gameover' | 'augment';
@@ -224,6 +225,7 @@ export const useGame = create<GameState>((set, get) => ({
   backToMenu: () => {
     projectiles.clear();
     fx.clear();
+    cancelLock();
     set({ status: 'menu' });
   },
 
@@ -240,8 +242,13 @@ export const useGame = create<GameState>((set, get) => ({
       const bestWave = Math.max(s.bestWave, s.wave);
       saveBest('neon-siege-best-score', bestScore);
       saveBest('neon-siege-best-wave', bestWave);
-      runtime.timeScale = 1;
+      // Player owns timeScale and will stop the clock now that the run is over;
+      // clear its inputs so nothing carries into the game-over screen.
       runtime.slowMo = 0;
+      runtime.hitStop = 0;
+      runtime.damageDirs.length = 0;
+      runtime.damageNumbers.length = 0;
+      cancelLock();
       set({ health: 0, status: 'gameover', lastDamageAt: runtime.elapsed, bestScore, bestWave });
       audio.gameOver();
       if (document.pointerLockElement) document.exitPointerLock();
@@ -257,7 +264,7 @@ export const useGame = create<GameState>((set, get) => ({
     const world = Math.atan2(dx, -dz);
     let rel = world - runtime.yaw;
     rel = Math.atan2(Math.sin(rel), Math.cos(rel));
-    runtime.damageDirs.push({ angle: rel, life: 0 });
+    runtime.damageDirs.push({ id: uid(), angle: rel, life: 0 });
     if (runtime.damageDirs.length > 8) runtime.damageDirs.shift();
     get().damagePlayer(amount);
   },
@@ -415,8 +422,11 @@ export const useGame = create<GameState>((set, get) => ({
         }
       }
       // maybe drop a pickup
+      // "running dry" has to be relative to the weapon: the Rail Driver's whole
+      // reserve is 20, so a flat threshold left it permanently in pity-drop mode.
       const reserveNow = get().reserves[s.weapon];
-      const drop = Math.random() < PICKUPS.dropChance || (reserveNow < 30 && Math.random() < 0.6);
+      const lowOnAmmo = reserveNow < WEAPONS[s.weapon].startingReserve * 0.3;
+      const drop = Math.random() < PICKUPS.dropChance || (lowOnAmmo && Math.random() < 0.6);
       if (drop && rt) {
         const kind: 'health' | 'ammo' =
           get().health < s.maxHealth * 0.5

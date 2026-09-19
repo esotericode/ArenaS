@@ -66,7 +66,7 @@ export const runtime = {
   weaponSwapT: 0,
   currentWeapon: 'rifle' as WeaponId,
   /** world-space directions of recent hits, for the damage indicator */
-  damageDirs: [] as { angle: number; life: number }[],
+  damageDirs: [] as { id: number; angle: number; life: number }[],
   /** floating combat text */
   damageNumbers: [] as DamageNumber[],
 };

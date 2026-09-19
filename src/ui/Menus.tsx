@@ -160,11 +160,13 @@ function AugmentSummary({ augments }: { augments: Record<string, number> }) {
 export function Menus() {
   const status = useGame((s) => s.status);
   const { score, kills, wave, bestScore, bestWave, augments, startGame, backToMenu } = useGame();
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(audio.muted);
   const [showSettings, setShowSettings] = useState(false);
   const [lockPending, setLockPending] = useState(false);
 
   useEffect(() => onLockPending(setLockPending), []);
+  // the M key can mute from anywhere, so follow the engine rather than guessing
+  useEffect(() => audio.onMuteChange(() => setMuted(audio.muted)), []);
   useEffect(() => {
     if (status === 'menu') setShowSettings(false);
   }, [status]);
@@ -232,8 +234,7 @@ export function Menus() {
                   <Button
                     onClick={() => {
                       audio.init();
-                      audio.setMuted(!muted);
-                      setMuted(!muted);
+                      audio.setMuted(!audio.muted);
                     }}
                   >
                     Sound: {muted ? 'Off' : 'On'}
