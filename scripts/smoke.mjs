@@ -277,19 +277,27 @@ check('resuming restarts the clock', resumedScale === 1, `timeScale ${resumedSca
 
 // Shake was decayed on the game clock but applied to the camera unconditionally,
 // so it never settled once a run ended.
-const shakeSettled = await page.evaluate(async () => {
+// Decay is per-frame, and the software renderer's frame rate swings wildly, so
+// polling for the end state is the only stable way to assert this. Waiting a
+// fixed wall-clock interval and checking the value is flaky by construction.
+await page.evaluate(() => {
   window.__game.setState({ status: 'gameover' });
-  // realistic post-burst values; recoil settles at 0.25/s
   window.__runtime.shake = 1;
   window.__runtime.recoil = 0.1;
-  await new Promise((r) => setTimeout(r, 1500));
-  return { shake: window.__runtime.shake, recoil: window.__runtime.recoil };
 });
-// Assert "settled", not "exactly zero" — how far the decay gets in a fixed wall
-// time depends on the frame rate, and under software rendering that varies.
+let shakeSettled = null;
+const shakeDeadline = Date.now() + 20000;
+while (Date.now() < shakeDeadline) {
+  await new Promise((r) => setTimeout(r, 250));
+  shakeSettled = await page.evaluate(() => ({
+    shake: window.__runtime.shake,
+    recoil: window.__runtime.recoil,
+  }));
+  if (shakeSettled.shake === 0 && shakeSettled.recoil === 0) break;
+}
 check(
   'shake settles after the run ends',
-  shakeSettled.shake < 0.05 && shakeSettled.recoil < 0.02,
+  !!shakeSettled && shakeSettled.shake === 0 && shakeSettled.recoil === 0,
   JSON.stringify(shakeSettled),
 );
 
