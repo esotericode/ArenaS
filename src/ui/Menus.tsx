@@ -242,7 +242,9 @@ export function Menus() {
                 </div>
               </div>
               <p className="mt-4 text-center text-[11px] text-slate-500">
-                Click Deploy to lock the mouse pointer. Best played in Chrome / Edge / Firefox on desktop.
+                Click Deploy to lock the mouse pointer. Aim is calibrated 1:1 with CS2 — sensitivity 1
+                turns exactly as it does there at the same DPI. Chrome or Edge on desktop give raw,
+                acceleration-free mouse input; other browsers fall back to OS-adjusted movement.
               </p>
             </>
           )}
