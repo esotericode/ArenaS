@@ -2,7 +2,7 @@
   "name": "neon-siege",
   "description": "A first-person 3D arena wave shooter that runs entirely in the browser.",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
